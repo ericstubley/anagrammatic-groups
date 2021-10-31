@@ -146,8 +146,9 @@ def find_admissible_pairs(anagraphs):
 def reduce_anagraphs(anagraphs_old, pairs):
 	"""  given an anagraph dictionary and list of admissible pairs, construct
 	a new anagraph dictionary with vertices all the reduced words and edges
-	all the reduced edges. This has the effect of possibly generating new
-	relations by connecting previously unconnected graphs. """
+	all the reduced edges and any newly implied edges. This has the effect of
+	possible generating new relations by connecting previously unconnected
+	graphs. """
 
 	anagraphs_new = {}
 
@@ -163,6 +164,15 @@ def reduce_anagraphs(anagraphs_old, pairs):
 			w1 = reduce_word(e[0], red_c)
 			w2 = reduce_word(e[1], red_c)
 			anagraphs_new[red_c].add_edge(w1, w2)
+
+		# edges are relations w_1=w_2, so by transitivity of equality
+		# all the connected components should become complete
+		for c in anagraphs_new[red_c].connected_components():
+		 	if not anagraphs_new[red_c].is_clique(c, induced=False):
+		 		anagraphs_new[red_c].add_clique(c, loops=True)
+
+		anagraphs_new[red_c].remove_multiple_edges()
+		anagraphs_new[red_c].remove_loops()
 
 
 	to_delete = [c for c in anagraphs_new.keys() if len(anagraphs_new[c].vertices()) <=1]
