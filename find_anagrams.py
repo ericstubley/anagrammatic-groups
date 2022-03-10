@@ -7,6 +7,7 @@ from itertools import combinations
 letters = [chr(i + ord('a')) for i in range(26)]
 letter_pairs = list(combinations(letters, r=2))
 char_to_index = dict((chr(i + ord('a')), i) for i in range(26))
+index_to_char = dict((i, chr(i + ord('a'))) for i in range(26))
 
 
 # TODO
@@ -155,15 +156,20 @@ def make_irreducibles_file(irreducibles):
 
 
 def make_history_files(anagram_dict):
+    history_dict = defaultdict(list)
+    for c in anagram_dict:
+        indices_present = [i for i in range(26) if c[i] != 0]
+        for i, j in combinations(indices_present, 2):
+            alpha, beta = index_to_char[i], index_to_char[j]
+            anagrams = sorted(list(anagram_dict[c].keys()))
+            if is_useful_history(anagrams, (alpha, beta)):
+                history_dict[(alpha, beta)].append(anagrams)
+
     for alpha, beta in letter_pairs:
         print(f"\r{alpha}, {beta}", end="")
-        i, j = char_to_index[alpha], char_to_index[beta]
         with open(f"history/history_{alpha}{beta}.txt", 'w') as f:
-            for c in anagram_dict:
-                anagrams = sorted(list(anagram_dict[c].keys()))
-                if c[i] > 0 and c[j] > 0 and \
-                        is_useful_history(anagrams, (alpha, beta)):
-                    f.write(f"{anagrams}\n")
+            for anagrams in history_dict[(alpha, beta)]:
+                f.write(f"{anagrams}\n")
     print("\r", end="")
 
 
@@ -182,7 +188,7 @@ if __name__ == "__main__":
     pairs = defaultdict(set)
 
     print("Making history files")
-    # make_history_files(anagram_dict)
+    make_history_files(anagram_dict)
 
     step = 1
     while True:
