@@ -9,55 +9,21 @@ letter_pairs = list(combinations(letters, r=2))
 char_to_index = dict((chr(i + ord('a')), i) for i in range(26))
 
 
+# TODO
+# comments moar
+# maybe you actually do need disjoin sets; the reduction and recombining as
+#   currently implement is a garbage
+# in step two the diwans=windas relation and dwines=widens relations look to
+#   be getting erroneously combined to produce the (i, w) commutator too early
+# at the beginning same count => complete graph
+# later on same count =/=> in a complete graph
+
+
 def letter_counts(word):
     counts = [0]*26
     for c in word:
         counts[char_to_index[c]] += 1
     return tuple(counts)
-
-
-# def is_admissible_pair(w1, w2):
-#     """ Test if words w1 and w2 are an admissible pair, i.e.
-#     w1 = s1 + alpha + beta + s2
-#     w2 = s1 + beta + alpha + s2
-#     for characters alpha, beta and strings s1, s2. This will report correctly
-#     even if w1, w2 aren't anagrams; but for best performance avoid calling
-#     this on non-anagram input pairs. """
-#     if len(w1) != len(w2):
-#         return False 
-# 
-#     # assume that they are admissible, scan through until we have proof that
-#     # they're not. The s1_end, s2_start flags tell us where we think we are in
-#     # the process of scanning through the words
-#     ret = True
-#     s1_end, s2_start = False, False
-#     for i in range(len(w1)):
-#         if not s1_end and w1[i] != w2[i]:
-#             alpha, beta = w1[i], w2[i]
-#             s1_end = True
-#             ret = False # set to False until we see the commutation happen
-#         elif s1_end and not s2_start:
-#             if w1[i] == beta and w2[i] == alpha:
-#                 s2_start = True
-#                 ret = True
-#             else:
-#                 ret = False
-#                 break
-#         elif s2_start and w1[i] != w2[i]:
-#             ret = False
-#             break
-#         else: # this encompasses scanning through s1 and s2 if they agree
-#             continue
-#     ret = ret and s1_end and s2_start
-#     if not ret:
-#         return False
-#     else:
-#         return tuple(sorted([alpha, beta]))
-# 
-# 
-#     """ TODO this reads more complex than the original; do some testing?
-#     or maybe you're not actually gonna use this because you'll have the lists
-#     of admissible siblings """
 
 
 def admissible_siblings(word):
@@ -70,30 +36,15 @@ def admissible_siblings(word):
 
 def update_admissible_pairs(anagram_dict, pairs):
     """ iterate through the anagram_dict, searching for more admissible pairs.
-    modify the set pairs in place by adding any newly found pairs. """
+    modify the dictionary pairs in place by adding any newly found pairs. """
+    new_pairs = defaultdict(set)
     for count in anagram_dict:
         for word in anagram_dict[count]:
             for sibling, pair in admissible_siblings(word):
-                if sibling in anagram_dict[count]:
-                    pairs.add(pair)
+                if pair not in pairs and sibling in anagram_dict[count]:
+                    new_pairs[pair].add(tuple(sorted((word, sibling))))
+    pairs.update(new_pairs)
     return pairs
-
-
-def load_dictionary(name):
-    """ load a dictionary text file without doing any processing """
-    with open(name, 'r') as f:
-        return f.readlines()
-
-
-def process_dictionary(raw):
-    """ clean up the dictionary; make everything lowercase and filter out any
-    words which aren't strictly alphabetic characters """
-    dictionary = []
-    for word in raw:
-        word = word.rstrip().lower()
-        if word.isalpha():
-            dictionary.append(word)
-    return dictionary
 
 
 def is_useful_history(anagrams, pair):
@@ -167,24 +118,93 @@ def reduce_anagram_dict(anagram_dict, pairs):
     return anagram_dict
 
 
+def load_dictionary(name):
+    """ load a dictionary text file without doing any processing """
+    with open(name, 'r') as f:
+        return f.readlines()
+
+
+def process_dictionary(raw):
+    """ clean up the dictionary; make everything lowercase and filter out any
+    words which aren't strictly alphabetic characters """
+    dictionary = []
+    for word in raw:
+        word = word.rstrip().lower()
+        if word.isalpha():
+            dictionary.append(word)
+    return dictionary
+
+
+def make_quality_files(pairs):
+    with open("pairs_good.txt", 'w') as f_good, \
+            open("pairs_bad.txt", 'w') as f_bad:
+        for p in letter_pairs:
+            if p in pairs:
+                f_good.write(f"{p}\n")
+            else:
+                f_bad.write(f"{p}\n")
+
+
+def make_irreducibles_file(irreducibles):
+    with open("irreds.txt", 'w') as f:
+        for c in irreducibles:
+            ls = []
+            for word in irreducibles[c]:
+                ls += irreducibles[c][word]
+            f.write(f"{ls}\n")
+
+
+def make_history_files(anagram_dict):
+    for alpha, beta in letter_pairs:
+        print(f"\r{alpha}, {beta}", end="")
+        i, j = char_to_index[alpha], char_to_index[beta]
+        with open(f"history/history_{alpha}{beta}.txt", 'w') as f:
+            for c in anagram_dict:
+                anagrams = sorted(list(anagram_dict[c].keys()))
+                if c[i] > 0 and c[j] > 0 and \
+                        is_useful_history(anagrams, (alpha, beta)):
+                    f.write(f"{anagrams}\n")
+    print("\r", end="")
+
+
+def make_status_file(step, anagram_dict, pairs):
+    with open(f"pairs_{step}.txt", 'w') as f:
+        for p in letter_pairs:
+            if p in pairs:
+                f.write(f"{p}, {sorted(list(pairs[p]))}\n") 
+
+
 if __name__ == "__main__":
     dictionary_file = sys.argv[1]
+    print("Processing dictionary")
     dictionary_data = process_dictionary(load_dictionary(dictionary_file)) 
     anagram_dict = build_anagram_dict(dictionary_data)
-    pairs = set()
+    pairs = defaultdict(set)
 
-    count = 1
+    print("Making history files")
+    # make_history_files(anagram_dict)
+
+    step = 1
     while True:
         num_counts, num_pairs = len(anagram_dict), len(pairs)
-        print(f"Step {count}")
+        print(f"Step {step}")
 
         pairs = update_admissible_pairs(anagram_dict, pairs)
         anagram_dict = reduce_anagram_dict(anagram_dict, pairs)
 
         print(f"{num_counts} letter counts, {len(pairs)} admissible pairs")
+        make_status_file(step, anagram_dict, pairs)
         if num_counts == len(anagram_dict) and num_pairs == len(pairs):
             break
-        count += 1
+        step += 1
+
+    print("Making outcome files")
+    make_quality_files(pairs)
+    make_irreducibles_file(anagram_dict)
+    print("Done!")
+
+
+
 
 
 
