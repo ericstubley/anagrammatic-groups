@@ -2,7 +2,10 @@
 
 import sys
 from collections import defaultdict
+from functools import partial
 from itertools import combinations
+from disjoint_forest import DisjointForest
+
 
 letters = [chr(i + ord('a')) for i in range(26)]
 letter_pairs = list(combinations(letters, r=2))
@@ -12,12 +15,7 @@ index_to_char = dict((i, chr(i + ord('a'))) for i in range(26))
 
 # TODO
 # comments moar
-# maybe you actually do need disjoin sets; the reduction and recombining as
-#   currently implement is a garbage
-# in step two the diwans=windas relation and dwines=widens relations look to
-#   be getting erroneously combined to produce the (i, w) commutator too early
-# at the beginning same count => complete graph
-# later on same count =/=> in a complete graph
+# clean up this file to have a more sensible ordering of functions
 
 
 def letter_counts(word):
@@ -39,13 +37,16 @@ def update_admissible_pairs(anagram_dict, pairs):
     """ iterate through the anagram_dict, searching for more admissible pairs.
     modify the dictionary pairs in place by adding any newly found pairs. """
     new_pairs = defaultdict(set)
+    update_flag = False
     for count in anagram_dict:
         for word in anagram_dict[count]:
             for sibling, pair in admissible_siblings(word):
-                if pair not in pairs and sibling in anagram_dict[count]:
+                if pair not in pairs and sibling in anagram_dict[count] \
+                        and anagram_dict[count].are_related(word, sibling):
                     new_pairs[pair].add(tuple(sorted((word, sibling))))
+                    update_flag = True
     pairs.update(new_pairs)
-    return pairs
+    return pairs, update_flag
 
 
 def is_useful_history(anagrams, pair):
@@ -61,18 +62,25 @@ def is_useful_history(anagrams, pair):
 
 
 def build_anagram_dict(dictionary):
-    """ build a dictionary of
-    letter count -> (dictionary of reduced word -> originating words)
+    """ build a dictionary of 
+        letter count -> DisjointForest of words having that letter count
+    the forests are initially totally related
     """
-    # the argument to defaultdict needs to be a callable constructor
-    anagram_dict = defaultdict(lambda: defaultdict(list)) 
+    # make totally unrelated disjoint forests
+    anagram_dict = defaultdict(DisjointForest) 
     for word in dictionary:
         counts = letter_counts(word)
-        anagram_dict[counts][word].append(word)
+        anagram_dict[counts][word] = word
 
+    # remove all letter counts where we found no anagram relations
     to_delete = [c for c in anagram_dict if len(anagram_dict[c]) == 1]
     for c in to_delete:
         anagram_dict.pop(c)
+
+    # make each forests totally related
+    for count in anagram_dict:
+        anagrams = list(anagram_dict[count].keys())
+        anagram_dict[count].add_relations(anagrams)
 
     return anagram_dict
 
@@ -103,20 +111,23 @@ def reduce_word(word, count):
 def reduce_anagram_dict(anagram_dict, pairs):
     """ modify anagram_dict in place, reducing according to pairs """
     existing_counts = list(anagram_dict.keys())
+    reduce_flag = False
 
     for count in existing_counts:
         red_count = reduce_count(count, pairs)
         if red_count != count:
-            for word in anagram_dict[count]:
-                red_word = reduce_word(word, red_count)
-                anagram_dict[red_count][red_word] += anagram_dict[count][word]
+            reduce_flag = True
+
+            reduction_function = partial(reduce_word, count=red_count)
+            new_forest = anagram_dict[count].apply_map(reduction_function)
+            anagram_dict[red_count].merge(new_forest)
 
             anagram_dict.pop(count)
 
     to_delete = [c for c in anagram_dict if len(anagram_dict[c]) == 1]
     for c in to_delete:
         anagram_dict.pop(c)
-    return anagram_dict
+    return anagram_dict, reduce_flag
 
 
 def load_dictionary(name):
@@ -149,9 +160,7 @@ def make_quality_files(pairs):
 def make_irreducibles_file(irreducibles):
     with open("irreds.txt", 'w') as f:
         for c in irreducibles:
-            ls = []
-            for word in irreducibles[c]:
-                ls += irreducibles[c][word]
+            ls = list(irreducibles[c].keys())
             f.write(f"{ls}\n")
 
 
@@ -173,15 +182,19 @@ def make_history_files(anagram_dict):
     print("\r", end="")
 
 
-def make_status_file(step, anagram_dict, pairs):
+def make_status_file(step, pairs):
     with open(f"pairs_{step}.txt", 'w') as f:
         for p in letter_pairs:
             if p in pairs:
                 f.write(f"{p}, {sorted(list(pairs[p]))}\n") 
 
 
-if __name__ == "__main__":
-    dictionary_file = sys.argv[1]
+def state_of_word(word, anagram_dict, pairs):
+    current_count = reduce_count(letter_counts(word), pairs)
+    return anagram_dict[current_count]
+
+
+def main(dictionary_file):
     print("Processing dictionary")
     dictionary_data = process_dictionary(load_dictionary(dictionary_file)) 
     anagram_dict = build_anagram_dict(dictionary_data)
@@ -191,18 +204,21 @@ if __name__ == "__main__":
     make_history_files(anagram_dict)
 
     step = 1
+    print("Start of main loop")
     while True:
-        num_counts, num_pairs = len(anagram_dict), len(pairs)
         print(f"Step {step}")
-
-        pairs = update_admissible_pairs(anagram_dict, pairs)
-        anagram_dict = reduce_anagram_dict(anagram_dict, pairs)
-
+        num_counts = len(anagram_dict)
+        pairs, pair_flag = update_admissible_pairs(anagram_dict, pairs)
         print(f"{num_counts} letter counts, {len(pairs)} admissible pairs")
-        make_status_file(step, anagram_dict, pairs)
-        if num_counts == len(anagram_dict) and num_pairs == len(pairs):
+        anagram_dict, red_flag = reduce_anagram_dict(anagram_dict, pairs)
+
+        make_status_file(step, pairs)
+
+        if not (pair_flag or red_flag): 
             break
         step += 1
+    print("End of main loop")
+
 
     print("Making outcome files")
     make_quality_files(pairs)
@@ -210,7 +226,6 @@ if __name__ == "__main__":
     print("Done!")
 
 
-
-
-
-
+if __name__ == "__main__":
+    dictionary_file = sys.argv[1]
+    main(dictionary_file)
