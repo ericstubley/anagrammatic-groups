@@ -9,7 +9,7 @@ Input:
 
 This program should be called from the command line as follows:
 
-`sage find_anagrams.sage dictionary.txt`
+`python3 find_anagrams.py dictionary.txt`
 
 The file `dictionary.txt` should be a text file containing one word per line of the intended dictionary.
 
