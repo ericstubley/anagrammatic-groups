@@ -4,6 +4,7 @@ import sys
 from collections import defaultdict
 from functools import partial
 from itertools import combinations
+from os import mkdir
 from disjoint_forest import DisjointForest
 
 
@@ -167,11 +168,11 @@ def build_anagram_dict(dictionary):
 
 
 """ HISTORY FUNCTIONS
-The next two functions are used to identify and write to files those anagrams
-which have the potential to produce useful commutators. This output is key to
-proving that some quotients of the anagram group are free; the fact that j, q,
-x, z have no mutual history is the proof that the quotient of the anagram
-group by all letters except those is free. """
+The next three functions are used to identify and write to files those
+anagrams which have the potential to produce useful commutators. This output
+is key to proving that some quotients of the anagram group are free; the fact
+that j, q, x, z have no mutual history is the proof that the quotient of the 
+anagram group by all letters except those is free. """
 
 
 def is_useful_history(anagrams, pair):
@@ -188,10 +189,10 @@ def is_useful_history(anagrams, pair):
     return len(patterns) > 1
 
 
-def make_history_files(anagram_dict):
-    """ For each pair of letters, write a file that contains a list of all the
-    original sets of anagrams which could provide interesting relations
-    invoving that pair. """
+def make_history_dict(anagram_dict):
+    """ Make a dictionary which maps each letter pair to the lists of anagrams
+    which produce interesting relations among those words, as per the previous
+    function. """
     history_dict = defaultdict(list)
     for c in anagram_dict:
         indices_present = [i for i in range(26) if c[i] != 0]
@@ -200,6 +201,20 @@ def make_history_files(anagram_dict):
             anagrams = sorted(list(anagram_dict[c].keys()))
             if is_useful_history(anagrams, (alpha, beta)):
                 history_dict[(alpha, beta)].append(anagrams)
+    return history_dict
+
+
+def make_history_files(anagram_dict):
+    """ For each pair of letters, write a file that contains a list of all the
+    original sets of anagrams which could provide interesting relations
+    invoving that pair. """
+
+    history_dict = make_history_dict(anagram_dict)
+
+    try:
+        mkdir("history")
+    except FileExistsError:
+        pass
 
     for alpha, beta in letter_pairs:
         print(f"\r{alpha}, {beta}", end="")
@@ -250,7 +265,10 @@ def state_of_word(word, anagram_dict, pairs):
     """ Used to find the current context of a given word. Not used by any
     other function, is a convenient debugging/tracking tool. """
     current_count = reduce_count(letter_counts(word), pairs)
-    return anagram_dict[current_count]
+    if current_count in anagram_dict:
+        return anagram_dict[current_count]
+    else:
+        return None
 
 
 def main(dictionary_file):
