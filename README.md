@@ -2,7 +2,7 @@
 
 This program reads in an english language dictionary as a text file, and outputs a number of text files having to do with the structure of the anagrammatic group with that dictionary.
 The math article talking about this project can be found at https://arxiv.org/abs/2111.04517.
-Shoot me an email if you stumble across this and are curious to learn more!
+Shoot me an email at ericdavidstubley@gmail.com if you stumble across this and are curious to learn more!
 
 Input:
 ------
